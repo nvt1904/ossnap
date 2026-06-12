@@ -472,7 +472,8 @@ def pull(ssh_dir_override: str | None, repos_dir_override: str | None):
 
         if ssh_selection:
             try:
-                ssh.restore_ssh(tmp, ssh_dir, password, ssh_selection)
+                with ui.status_spinner("Restoring SSH keys..."):
+                    ssh.restore_ssh(tmp, ssh_dir, password, ssh_selection)
             except DecryptionError:
                 ui.error("Wrong encryption password. Aborting SSH restore.")
                 sys.exit(1)
@@ -531,14 +532,16 @@ def pull(ssh_dir_override: str | None, repos_dir_override: str | None):
 
             env_restored = 0
             env_skipped = 0
-            for snap_rel in selected_env:
-                if repos_base:
-                    dest_path = repos_base / snap_rel
-                else:
-                    dest_path = Path.home() / snap_rel
-                r, s = repos.restore_envs(env_base, snap_rel, dest_path, password)
-                env_restored += r
-                env_skipped += s
+            with ui.status_spinner("Restoring env files...") as s:
+                for snap_rel in selected_env:
+                    s.update(f"[dim]Restoring {snap_rel}...[/]")
+                    if repos_base:
+                        dest_path = repos_base / snap_rel
+                    else:
+                        dest_path = Path.home() / snap_rel
+                    r, s_tmp = repos.restore_envs(env_base, snap_rel, dest_path, password)
+                    env_restored += r
+                    env_skipped += s_tmp
             if env_restored:
                 ui.success(f"Restored {env_restored} env file(s) ({env_skipped} skipped)")
 
