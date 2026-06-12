@@ -256,16 +256,18 @@ def init():
 
     # 10. Preview what will be backed up
     ui.header("Preview")
-    ssh_result = ssh.scan_ssh(Path(ssh_dir).expanduser())
+    with ui.status_spinner("Scanning SSH directory..."):
+        ssh_result = ssh.scan_ssh(Path(ssh_dir).expanduser())
     with ui.status_spinner("Scanning repos..."):
         repo_list = repos.collect_repos(
             [str(Path(d).expanduser()) for d in scan_dirs],
             cfg.get("exclude_dirs", config.DEFAULT_CONFIG["exclude_dirs"]),
         )
-    repo_results = [
-        (entry["path"], repos.scan_envs(Path.home() / entry["path"], env_patterns))
-        for entry in repo_list
-    ]
+    with ui.status_spinner("Scanning env files..."):
+        repo_results = [
+            (entry["path"], repos.scan_envs(Path.home() / entry["path"], env_patterns))
+            for entry in repo_list
+        ]
     ui.print_snapshot_tree(repo_results, ssh_result)
 
     ui.header("Done! Run `ossnap snapshot` to create your first snapshot.")
@@ -366,10 +368,12 @@ def snapshot(name: str | None):
 
         env_base = tmp / "repos" / "envs"
         snapshot_results = []
-        for entry in repo_list:
-            repo_path = Path.home() / entry["path"]
-            env_files = repos.snapshot_envs(repo_path, env_base, password, env_patterns)
-            snapshot_results.append((entry["path"], env_files))
+        with ui.status_spinner("Snapshotting env files...") as s:
+            for entry in repo_list:
+                s.update(f"[dim]Snapshotting {entry['path']}...[/]")
+                repo_path = Path.home() / entry["path"]
+                env_files = repos.snapshot_envs(repo_path, env_base, password, env_patterns)
+                snapshot_results.append((entry["path"], env_files))
 
         ui.print_snapshot_tree(snapshot_results, ssh_result)
 
