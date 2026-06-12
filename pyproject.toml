@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ossnap"
+version = "0.1.0"
+description = "Snapshot and restore your macOS dev environment"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = ["macos", "backup", "snapshot", "developer", "ssh", "dotenv"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "click>=8.1",
+    "cryptography>=42.0",
+    "keyring>=25.0",
+    "rich>=13.0",
+    "questionary>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nvt1904/macpack"
+Issues = "https://github.com/nvt1904/macpack/issues"
+
+[project.scripts]
+ossnap = "ossnap.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+ossnap = "src/ossnap"
