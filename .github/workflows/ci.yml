@@ -21,4 +21,4 @@ jobs:
         run: pip install -e .
 
       - name: Smoke test
-        run: macpack --help
+        run: ossnap --help

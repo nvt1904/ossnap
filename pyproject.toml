@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nvt1904/macpack"
-Issues = "https://github.com/nvt1904/macpack/issues"
+Homepage = "https://github.com/nvt1904/ossnap"
+Issues = "https://github.com/nvt1904/ossnap/issues"
 
 [project.scripts]
 ossnap = "ossnap.cli:main"

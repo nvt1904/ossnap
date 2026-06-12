@@ -1,20 +1,20 @@
-class MacpackError(Exception):
+class OSSnapError(Exception):
     pass
 
-class ConfigNotFoundError(MacpackError):
+class ConfigNotFoundError(OSSnapError):
     pass
 
-class GitError(MacpackError):
+class GitError(OSSnapError):
     pass
 
-class DecryptionError(MacpackError):
+class DecryptionError(OSSnapError):
     pass
 
-class NetworkError(MacpackError):
+class NetworkError(OSSnapError):
     pass
 
-class GhNotInstalledError(MacpackError):
+class GhNotInstalledError(OSSnapError):
     pass
 
-class GhAuthError(MacpackError):
+class GhAuthError(OSSnapError):
     pass
