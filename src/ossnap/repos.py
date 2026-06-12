@@ -121,6 +121,7 @@ def restore_envs(
             if not overwrite:
                 skipped += 1
                 continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
         crypto.decrypt_file(enc_file, dest, password)
         restored += 1
 

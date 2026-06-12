@@ -4,15 +4,24 @@ from pathlib import Path
 from .exceptions import GitError
 
 
-def _run(args: list[str], cwd=None) -> str:
+def _run(args: list[str], cwd=None, interactive=False) -> str:
     try:
-        result = subprocess.run(
-            args, cwd=cwd, check=True,
-            capture_output=True, text=True
-        )
-        return result.stdout.strip()
+        if interactive:
+            result = subprocess.run(
+                args, cwd=cwd, check=True, text=True
+            )
+            return ""
+        else:
+            result = subprocess.run(
+                args, cwd=cwd, check=True,
+                capture_output=True, text=True
+            )
+            return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        raise GitError(e.stderr.strip() or e.stdout.strip()) from e
+        if interactive:
+            raise GitError(f"Command failed: {' '.join(args)}")
+        else:
+            raise GitError(e.stderr.strip() or e.stdout.strip()) from e
     except FileNotFoundError:
         raise GitError(f"Command not found: {args[0]}")
 
@@ -49,21 +58,20 @@ def get_remote_url(repo_path: Path) -> str | None:
 
 def clone_repo(remote_url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    _run(["git", "clone", remote_url, str(dest)])
+    _run(["git", "clone", remote_url, str(dest)], interactive=True)
 
 
 def clone_or_pull(remote_url: str, dest: Path) -> None:
     if (dest / ".git").exists():
         try:
-            _run(["git", "-C", str(dest), "pull", "--ff-only"])
+            _run(["git", "-C", str(dest), "pull", "--ff-only"], interactive=True)
         except GitError:
-            pass  # if pull fails (e.g. empty repo), that's fine
+            pass
     else:
         dest.mkdir(parents=True, exist_ok=True)
         try:
-            _run(["git", "clone", remote_url, str(dest)])
+            _run(["git", "clone", remote_url, str(dest)], interactive=True)
         except GitError as e:
-            # empty repo — init locally and set remote
             if "empty" in str(e).lower() or dest.exists():
                 _run(["git", "-C", str(dest), "init"])
                 _run(["git", "-C", str(dest), "remote", "add", "origin", remote_url])
@@ -111,5 +119,5 @@ def git_add_commit_push(repo_path: Path, message: str) -> bool:
     if not has_changes(repo_path):
         return False
     _run(["git", "-C", str(repo_path), "commit", "-m", message])
-    _run(["git", "-C", str(repo_path), "push", "--set-upstream", "origin", "HEAD"])
+    _run(["git", "-C", str(repo_path), "push", "--set-upstream", "origin", "HEAD"], interactive=True)
     return True
