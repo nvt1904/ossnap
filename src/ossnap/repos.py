@@ -10,19 +10,32 @@ SKIP_DIRS = {"node_modules", ".git", "venv", "__pycache__", ".venv", "dist", "bu
 
 
 
-def collect_repos(scan_dirs: list[str], exclude_dirs: list[str] | None = None) -> list[dict]:
-    found = git.find_git_repos(scan_dirs, exclude_dirs)
+def collect_repos(
+    scan_dirs: list[str],
+    exclude_dirs: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[dict]:
+    found = git.find_git_repos(scan_dirs, exclude_dirs, exclude_paths)
     result = []
-    for repo_path in found:
+    for item in found:
+        repo_path = item["path"]
+        repo_type = item["type"]
         try:
             rel = str(repo_path.relative_to(HOME))
         except ValueError:
             rel = str(repo_path)
-        remote = git.get_remote_url(repo_path)
-        if not remote:
-            ui.warn(f"No remote origin: {repo_path} — skipping")
-            continue
-        result.append({"path": rel, "remote": remote})
+        if repo_type == "repo_manifest":
+            remote = git.get_manifest_remote(repo_path)
+            if not remote:
+                ui.warn(f"No manifest remote: {repo_path} — skipping")
+                continue
+            result.append({"path": rel, "remote": remote, "type": "repo_manifest"})
+        else:
+            remote = git.get_remote_url(repo_path)
+            if not remote:
+                ui.warn(f"No remote origin: {repo_path} — skipping")
+                continue
+            result.append({"path": rel, "remote": remote})
     return result
 
 

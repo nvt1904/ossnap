@@ -26,27 +26,44 @@ def _run(args: list[str], cwd=None, interactive=False) -> str:
         raise GitError(f"Command not found: {args[0]}")
 
 
-def find_git_repos(scan_dirs: list[str], exclude_dirs: list[str] | None = None) -> list[Path]:
-    exclude = set(exclude_dirs or [])
-    repos = []
+def find_git_repos(
+    scan_dirs: list[str],
+    exclude_dirs: list[str] | None = None,
+    exclude_paths: list[str] | None = None,
+) -> list[dict]:
+    """Return list of {"path": Path, "type": "git"|"repo_manifest"}."""
+    exclude_names = set(exclude_dirs or [])
+    exclude_abs = {str(Path(p).expanduser().resolve()) for p in (exclude_paths or [])}
+    results = []
 
     def walk(path: Path):
         try:
             entries = list(path.iterdir())
         except PermissionError:
             return
+        if (path / ".repo" / "manifest.xml").exists():
+            results.append({"path": path, "type": "repo_manifest"})
+            return
         if (path / ".git").exists():
-            repos.append(path)
-            return  # don't recurse into found repos
+            results.append({"path": path, "type": "git"})
+            return
         for entry in entries:
-            if entry.is_dir() and entry.name not in exclude and not entry.name.startswith("."):
-                walk(entry)
+            if not entry.is_dir():
+                continue
+            if entry.name in exclude_names or entry.name.startswith("."):
+                continue
+            if str(entry.resolve()) in exclude_abs:
+                continue
+            walk(entry)
 
     for d in scan_dirs:
         p = Path(d).expanduser()
-        if p.exists():
-            walk(p)
-    return repos
+        if not p.exists():
+            continue
+        if str(p.resolve()) in exclude_abs:
+            continue
+        walk(p)
+    return results
 
 
 def get_remote_url(repo_path: Path) -> str | None:
@@ -54,6 +71,26 @@ def get_remote_url(repo_path: Path) -> str | None:
         return _run(["git", "-C", str(repo_path), "remote", "get-url", "origin"])
     except GitError:
         return None
+
+
+def get_manifest_remote(repo_root: Path) -> str | None:
+    manifests_dir = repo_root / ".repo" / "manifests"
+    if not manifests_dir.exists():
+        return None
+    try:
+        return _run(["git", "-C", str(manifests_dir), "remote", "get-url", "origin"])
+    except GitError:
+        return None
+
+
+def init_repo_manifest(manifest_url: str, dest: Path) -> None:
+    """Initialize a repo manifest tree using the 'repo' tool."""
+    import shutil
+    if not shutil.which("repo"):
+        raise GitError("'repo' tool not found — install it from https://source.android.com/docs/setup/download")
+    dest.mkdir(parents=True, exist_ok=True)
+    _run(["repo", "init", "-u", manifest_url], cwd=str(dest), interactive=True)
+    _run(["repo", "sync"], cwd=str(dest), interactive=True)
 
 
 def clone_repo(remote_url: str, dest: Path) -> None:

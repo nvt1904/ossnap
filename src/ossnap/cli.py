@@ -176,7 +176,31 @@ def init():
     else:
         ui.success(f"Will scan: {', '.join(scan_dirs)}")
 
-    # 6. Env file patterns
+    # 6. Exclude paths (full paths to skip entirely, e.g. large AOSP trees)
+    ui.header("Exclude Paths")
+    ui.info("Add directories to skip entirely (e.g. large AOSP/ROM trees).")
+    existing_exclude_paths = [
+        str(Path(p).expanduser()) for p in existing_cfg.get("exclude_paths", [])
+    ]
+    exclude_paths: list[str] = list(existing_exclude_paths)
+    while True:
+        d = questionary.path(
+            "Exclude path (leave blank to finish):",
+            default="",
+            only_directories=True,
+        ).ask()
+        if d is None:
+            sys.exit(0)
+        if not d.strip():
+            break
+        expanded = str(Path(d).expanduser())
+        if expanded not in exclude_paths:
+            exclude_paths.append(expanded)
+            ui.success(f"Will exclude: {expanded}")
+    if exclude_paths:
+        ui.success(f"Excluded: {', '.join(exclude_paths)}")
+
+    # 8. Env file patterns
     ui.header("Env File Patterns")
     default_patterns = {".env", ".env.local", ".env.development", ".env.production"}
     existing_patterns = set(existing_cfg.get("env_patterns", [])) or default_patterns
@@ -207,7 +231,7 @@ def init():
 
     ui.success(f"Env patterns: {', '.join(env_patterns)}")
 
-    # 7. Encryption password
+    # 9. Encryption password
     ui.header("Encryption")
     existing_pw = crypto.get_password_if_exists()
     if existing_pw:
@@ -233,16 +257,17 @@ def init():
         crypto.set_password(pw)
         ui.success("Password saved to macOS Keychain")
 
-    # 8. Save config
+    # 10. Save config
     cfg = config.default_config()
     cfg["github_repo_url"] = repo_url
     cfg["ssh_dir"] = ssh_dir_input.replace(str(Path.home()), "~")
     cfg["scan_dirs"] = [str(d).replace(str(Path.home()), "~") for d in scan_dirs]
     cfg["env_patterns"] = env_patterns
+    cfg["exclude_paths"] = [str(p).replace(str(Path.home()), "~") for p in exclude_paths]
     config.save_config(cfg)
     ui.success("Config saved to ~/.ossnap/config.json")
 
-    # 9. Verify connection
+    # 11. Verify connection
     ui.header("Verifying connection")
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir) / "verify"
@@ -254,7 +279,7 @@ def init():
             ui.warn(f"Could not verify connection: {e}")
             ui.info("You can still snapshot/pull later.")
 
-    # 10. Preview what will be backed up
+    # 12. Preview what will be backed up
     ui.header("Preview")
     with ui.status_spinner("Scanning SSH directory..."):
         ssh_result = ssh.scan_ssh(Path(ssh_dir).expanduser())
@@ -262,10 +287,15 @@ def init():
         repo_list = repos.collect_repos(
             [str(Path(d).expanduser()) for d in scan_dirs],
             cfg.get("exclude_dirs", config.DEFAULT_CONFIG["exclude_dirs"]),
+            exclude_paths,
         )
     with ui.status_spinner("Scanning env files..."):
         repo_results = [
-            (entry["path"], repos.scan_envs(Path.home() / entry["path"], env_patterns))
+            (
+                entry["path"],
+                [] if entry.get("type") == "repo_manifest"
+                else repos.scan_envs(Path.home() / entry["path"], env_patterns),
+            )
             for entry in repo_list
         ]
     ui.print_snapshot_tree(repo_results, ssh_result)
@@ -337,6 +367,7 @@ def snapshot(name: str | None):
     scan_dirs = cfg["scan_dirs"]
     env_patterns = cfg.get("env_patterns", [".env", ".env.local"])
     exclude_dirs = cfg.get("exclude_dirs", [])
+    snapshot_exclude_paths = cfg.get("exclude_paths", [])
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir) / "snapshot_repo"
@@ -357,7 +388,7 @@ def snapshot(name: str | None):
 
         # Repos
         with ui.status_spinner("Discovering git repos..."):
-            repo_list = repos.collect_repos(scan_dirs, exclude_dirs)
+            repo_list = repos.collect_repos(scan_dirs, exclude_dirs, snapshot_exclude_paths)
 
         # Clear entire repos/ dir so stale entries don't accumulate
         repos_dir = tmp / "repos"
@@ -370,6 +401,9 @@ def snapshot(name: str | None):
         snapshot_results = []
         with ui.status_spinner("Snapshotting env files...") as s:
             for entry in repo_list:
+                if entry.get("type") == "repo_manifest":
+                    snapshot_results.append((entry["path"], []))
+                    continue
                 s.update(f"[dim]Snapshotting {entry['path']}...[/]")
                 repo_path = Path.home() / entry["path"]
                 env_files = repos.snapshot_envs(repo_path, env_base, password, env_patterns)
@@ -499,7 +533,21 @@ def pull(ssh_dir_override: str | None, repos_dir_override: str | None):
         cloned = 0
         for entry in [e for e in repo_list if e["path"] in selected_repo_paths]:
             local_path = repos_base / entry["path"] if repos_base else Path.home() / entry["path"]
-            if not local_path.exists():
+            if entry.get("type") == "repo_manifest":
+                if local_path.exists() and (local_path / ".repo").exists():
+                    ui.info(f"Already exists (manifest tree): {local_path}")
+                else:
+                    ui.info(f"Initializing manifest tree {entry['remote']} → {local_path}")
+                    try:
+                        git.init_repo_manifest(entry["remote"], local_path)
+                        cloned += 1
+                    except GitError as e:
+                        ui.warn(f"Could not init manifest tree: {e}")
+                        ui.info(f"  Manual steps:")
+                        ui.info(f"    mkdir -p {local_path} && cd {local_path}")
+                        ui.info(f"    repo init -u {entry['remote']}")
+                        ui.info(f"    repo sync")
+            elif not local_path.exists():
                 ui.info(f"Cloning {entry['remote']} → {local_path}")
                 try:
                     git.clone_repo(entry["remote"], local_path)
@@ -509,7 +557,7 @@ def pull(ssh_dir_override: str | None, repos_dir_override: str | None):
             else:
                 ui.info(f"Already exists: {local_path}")
         if cloned:
-            ui.success(f"Cloned {cloned} repo(s)")
+            ui.success(f"Cloned/initialized {cloned} repo(s)")
 
         # Env files — select which repos' env files to restore
         snapshot_envs = repos.list_snapshot_envs(env_base, [e["path"] for e in repo_list])

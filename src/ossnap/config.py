@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "scan_dirs": ["~/Documents", "~/Projects"],
     "env_patterns": [".env", ".env.local", ".env.development", ".env.production"],
     "exclude_dirs": ["node_modules", ".git", "venv", "__pycache__", ".venv"],
+    "exclude_paths": [],
 }
 
 
@@ -23,10 +24,10 @@ def load_config() -> dict:
         raise ConfigNotFoundError("Config not found. Run `ossnap init` first.")
     with open(CONFIG_FILE) as f:
         data = json.load(f)
-    # Expand ~ in path fields
     if data.get("ssh_dir"):
         data["ssh_dir"] = str(Path(data["ssh_dir"]).expanduser())
     data["scan_dirs"] = [str(Path(d).expanduser()) for d in data.get("scan_dirs", [])]
+    data["exclude_paths"] = [str(Path(p).expanduser()) for p in data.get("exclude_paths", [])]
     return data
 
 
