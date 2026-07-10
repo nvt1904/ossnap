@@ -89,6 +89,7 @@ def list_snapshot_items(snapshot_dir: Path) -> list[str]:
 
 def restore_ssh(snapshot_dir: Path, ssh_dir: Path, password: str, selection: set[str] | None = None) -> None:
     ssh_dir.mkdir(parents=True, exist_ok=True)
+    ssh_dir.chmod(0o700)
     ssh_snapshot_dir = snapshot_dir / "ssh"
     keys_dir = ssh_snapshot_dir / "keys"
 
@@ -143,5 +144,6 @@ def restore_ssh(snapshot_dir: Path, ssh_dir: Path, password: str, selection: set
                 dest = ssh_dir / enc_file.name
                 if not dest.exists():
                     shutil.copy2(enc_file, dest)
+                    dest.chmod(0o644)
 
     ui.success(f"SSH: restored {restored} file(s), skipped {skipped} existing")

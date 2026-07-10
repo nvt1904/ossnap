@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 import questionary
 
-from . import config, crypto, git, github, install, repos, ssh, ui
+from . import __version__, config, crypto, git, github, install, repos, ssh, ui
 from .exceptions import (
     ConfigNotFoundError,
     DecryptionError,
@@ -294,7 +294,11 @@ def init():
             (
                 entry["path"],
                 [] if entry.get("type") == "repo_manifest"
-                else repos.scan_envs(Path.home() / entry["path"], env_patterns),
+                else repos.scan_envs(
+                    Path.home() / entry["path"],
+                    env_patterns,
+                    cfg.get("exclude_dirs", []),
+                ),
             )
             for entry in repo_list
         ]
@@ -406,7 +410,9 @@ def snapshot(name: str | None):
                     continue
                 s.update(f"[dim]Snapshotting {entry['path']}...[/]")
                 repo_path = Path.home() / entry["path"]
-                env_files = repos.snapshot_envs(repo_path, env_base, password, env_patterns)
+                env_files = repos.snapshot_envs(
+                    repo_path, env_base, password, env_patterns, exclude_dirs
+                )
                 snapshot_results.append((entry["path"], env_files))
 
         ui.print_snapshot_tree(snapshot_results, ssh_result)
@@ -414,7 +420,7 @@ def snapshot(name: str | None):
         # Meta
         import json, platform
         meta = {
-            "tool_version": "0.1.0",
+            "tool_version": __version__,
             "snapshot_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             "hostname": platform.uname().node,
         }

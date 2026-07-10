@@ -52,23 +52,26 @@ def read_repos_json(snapshot_dir: Path) -> list[dict]:
     return json.loads(f.read_text())
 
 
-def _find_env_files(repo_path: Path, patterns: list[str]) -> list[Path]:
+def _find_env_files(repo_path: Path, patterns: list[str], exclude_dirs: list[str] | None = None) -> list[Path]:
     """Recursively find env files within repo, skipping non-source dirs."""
+    skip_set = SKIP_DIRS.copy()
+    if exclude_dirs:
+        skip_set.update(exclude_dirs)
     found = []
     for pattern in patterns:
         for f in repo_path.rglob(pattern):
             if f.name.endswith(".example"):
                 continue
             rel_parts = f.relative_to(repo_path).parts
-            if any(skip in rel_parts for skip in SKIP_DIRS):
+            if any(skip in rel_parts for skip in skip_set):
                 continue
             found.append(f)
     return found
 
 
-def scan_envs(repo_path: Path, patterns: list[str]) -> list[str]:
+def scan_envs(repo_path: Path, patterns: list[str], exclude_dirs: list[str] | None = None) -> list[str]:
     """Returns env file paths (relative to repo) found without snapshotting."""
-    return [str(f.relative_to(repo_path)) for f in _find_env_files(repo_path, patterns)]
+    return [str(f.relative_to(repo_path)) for f in _find_env_files(repo_path, patterns, exclude_dirs)]
 
 
 def snapshot_envs(
@@ -76,6 +79,7 @@ def snapshot_envs(
     env_base_dir: Path,
     password: str,
     patterns: list[str],
+    exclude_dirs: list[str] | None = None,
 ) -> list[str]:
     try:
         repo_rel = repo_path.relative_to(HOME)
@@ -84,7 +88,7 @@ def snapshot_envs(
     env_dir = env_base_dir / repo_rel
 
     snapped = []
-    for f in _find_env_files(repo_path, patterns):
+    for f in _find_env_files(repo_path, patterns, exclude_dirs):
         within_repo = f.relative_to(repo_path)       # e.g. apps/web/.env
         dest = env_dir / within_repo.parent / f"{f.name}.enc"
         crypto.encrypt_file(f, dest, password)
@@ -136,6 +140,7 @@ def restore_envs(
                 continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         crypto.decrypt_file(enc_file, dest, password)
+        dest.chmod(0o600)
         restored += 1
 
     return restored, skipped
