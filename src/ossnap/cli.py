@@ -235,12 +235,10 @@ def init():
     ui.header("Encryption")
     existing_pw = crypto.get_password_if_exists()
     if existing_pw:
-        change = questionary.confirm("Encryption password already set. Change it?", default=False).ask()
-        if not change:
-            pw = existing_pw
-            ui.success("Keeping existing password.")
-        else:
-            existing_pw = None
+        pw = existing_pw
+        ui.warn(
+            "Keeping the existing encryption password: password rotation is not supported yet."
+        )
 
     if not existing_pw:
         ui.info("Set a password to encrypt your SSH keys and .env files.")

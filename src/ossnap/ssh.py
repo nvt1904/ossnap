@@ -5,7 +5,7 @@ from pathlib import Path
 from . import crypto, ui
 
 SKIP_FILES = {"known_hosts", "environment"}
-ENCRYPTED_FILES = {"config", "authorized_keys"}
+ENCRYPTED_FILES = ("config", "authorized_keys")
 SKIP_EXTENSIONS = {".pub", ".pem.pub"}
 
 
@@ -59,7 +59,7 @@ def snapshot_ssh(snapshot_dir: Path, ssh_dir: Path, password: str) -> dict:
             crypto.encrypt_file(f, ssh_snapshot_dir / f"{f.name}.enc", password)
             result[f.name] = True
         elif f.name == "known_hosts":
-            shutil.copy2(f, ssh_snapshot_dir / "known_hosts")
+            crypto.encrypt_file(f, ssh_snapshot_dir / "known_hosts.enc", password)
             result["known_hosts"] = True
         elif _is_private_key(f):
             crypto.encrypt_file(f, keys_dir / f"{f.name}.enc", password)
@@ -78,7 +78,7 @@ def list_snapshot_items(snapshot_dir: Path) -> list[str]:
     for name in ENCRYPTED_FILES:
         if (ssh_snapshot_dir / f"{name}.enc").exists():
             items.append(name)
-    if (ssh_snapshot_dir / "known_hosts").exists():
+    if (ssh_snapshot_dir / "known_hosts.enc").exists() or (ssh_snapshot_dir / "known_hosts").exists():
         items.append("known_hosts")
     if keys_dir.exists():
         for f in sorted(keys_dir.iterdir()):
@@ -119,11 +119,22 @@ def restore_ssh(snapshot_dir: Path, ssh_dir: Path, password: str, selection: set
             dest.chmod(0o600)
             restored += 1
 
-    # Restore known_hosts
+    # Legacy plaintext known_hosts is supported for existing snapshots.
     if _selected("known_hosts"):
-        kh = ssh_snapshot_dir / "known_hosts"
-        if kh.exists() and not (ssh_dir / "known_hosts").exists():
-            shutil.copy2(kh, ssh_dir / "known_hosts")
+        encrypted_kh = ssh_snapshot_dir / "known_hosts.enc"
+        legacy_kh = ssh_snapshot_dir / "known_hosts"
+        dest = ssh_dir / "known_hosts"
+        if dest.exists():
+            ui.warn(f"Skipping existing: {dest}")
+            skipped += 1
+        elif encrypted_kh.exists():
+            crypto.decrypt_file(encrypted_kh, dest, password)
+            dest.chmod(0o644)
+            restored += 1
+        elif legacy_kh.exists():
+            shutil.copy2(legacy_kh, dest)
+            dest.chmod(0o644)
+            restored += 1
 
     # Restore keys
     if keys_dir.exists():

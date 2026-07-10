@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ossnap"
-version = "0.1.5"
+version = "0.1.6"
 description = "Snapshot and restore your macOS dev environment"
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,6 +24,9 @@ dependencies = [
     "rich>=13.0",
     "questionary>=2.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.urls]
 Homepage = "https://github.com/nvt1904/ossnap"

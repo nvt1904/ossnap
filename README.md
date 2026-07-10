@@ -13,7 +13,7 @@ ossnap backs up your SSH keys, `.env` files, and git repo list to a **private Gi
 - **Repo list** — re-clones all your git repos on restore
 - **Versioned snapshots** — full history, restore any point in time
 
-Everything sensitive is encrypted with AES before leaving your machine. The password lives in your macOS Keychain.
+Everything sensitive, including SSH host history, is encrypted before leaving your machine. The password lives in your macOS Keychain.
 
 ---
 
@@ -91,6 +91,7 @@ ossnap snapshot
     ├── ssh/
     │   ├── config          (encrypted)
     │   ├── authorized_keys (encrypted)
+    │   ├── known_hosts     (encrypted)
     │   └── keys/
     │       └── id_ed25519  (encrypted)
     └── repos/
@@ -102,7 +103,9 @@ ossnap snapshot
 
 Each snapshot is a git commit. History is preserved — roll back to any point.
 
-**Encryption**: AES-256 via [Fernet](https://cryptography.io/en/latest/fernet/), key derived from your password using PBKDF2-HMAC-SHA256 (600,000 iterations). Password stored in macOS Keychain.
+**Encryption**: authenticated encryption via [Fernet](https://cryptography.io/en/latest/fernet/), with a key derived from your password using PBKDF2-HMAC-SHA256 (600,000 iterations). Each encrypted file has a random salt and a versioned format header, so future encryption upgrades can remain compatible with existing snapshots. Password stored in macOS Keychain.
+
+Changing the encryption password is intentionally disabled until a full snapshot re-encryption workflow is available; changing it locally would make prior snapshots unreadable.
 
 ---
 

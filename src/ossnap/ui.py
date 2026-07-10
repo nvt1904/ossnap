@@ -55,7 +55,7 @@ def print_snapshot_tree(
         if ssh_result.get(name):
             ssh_branch.add(f"[green]{name}[/] [dim]· encrypted[/]")
     if ssh_result.get("known_hosts"):
-        ssh_branch.add("[dim]known_hosts · plain text[/]")
+        ssh_branch.add("[green]known_hosts[/] [dim]· encrypted[/]")
     if ssh_result.get("keys"):
         keys_branch = ssh_branch.add("[bold cyan]keys/[/]")
         for key in ssh_result.get("keys", []):
